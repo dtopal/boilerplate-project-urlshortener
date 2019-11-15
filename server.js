@@ -10,6 +10,8 @@ var valid = require('valid-url');
 
 var cors = require('cors');
 
+require('dotenv').config();
+
 var app = express();
 
 // Basic Configuration
@@ -17,6 +19,14 @@ var port = process.env.PORT || 3000;
 
 /** this project needs a db !! **/
 // mongoose.connect(process.env.MONGOLAB_URI);
+mongoose.connect(process.env.MONGO_URI);
+
+var Schema = mongoose.Schema;
+var addressSchema = new Schema({
+  original: { type: String, required: true },
+  short: { type: Number, required: true }
+});
+var Address = mongoose.model("Address", addressSchema);
 
 app.use(cors());
 
@@ -49,11 +59,32 @@ app.post("/api/shorturl/new", function (req, res) {
     if (err) {
       res.json({ "error": "invalid URL" });
       console.error(err);
-    } else {
-      console.log(address);
-      res.json({ "url": req.body.url });
+      return;
+    };
+  });
+
+  //if uri is in db then just return object
+  Address.find({ original: uri }, function (err, data) {
+    if (err) return console.error(err);
+    //console.log('in db: ' + uri);
+    //console.log(data);
+    if (data.length === 0) {
+      console.log('not found: ' + uri);
+      Address.estimatedDocumentCount(function(err, count){
+        var newAdd = new Address({
+          original: uri,
+          short: count + 1
+        });
+        console.log(newAdd);
+        newAdd.save();
+        res.json({ original_url: newAdd.original, short_url: newAdd.short });
+        })
     }
 
+    if (data.length > 0) {
+      console.log('found in db: ' + data[0].original);
+      res.json({ original_url: data[0].original, short_url: data[0].short });
+    };
   });
 
 
